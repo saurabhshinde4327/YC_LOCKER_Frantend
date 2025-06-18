@@ -1,11 +1,12 @@
-
 'use client';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+
 import LiveDate from './components/LiveDate';
 import DocumentTypesSlider from './components/DocumentTypesSlider';
 import DataCenter from './components/DataCenter';
@@ -21,6 +22,7 @@ interface ChatMessage {
   message: string;
   response: string;
   timestamp: string;
+  error?: boolean;
 }
 
 interface ErrorResponse {
@@ -43,10 +45,6 @@ export default function Home() {
 
   const getToken = () => {
     const token = localStorage.getItem('token') || '';
-    console.log('JWT Token:', token);
-    if (!token) {
-      console.warn('No JWT token found in localStorage');
-    }
     return token;
   };
 
@@ -62,27 +60,22 @@ export default function Home() {
       }
 
       try {
-        const url = `${API_BASE_URL}/history`; // ✅ FIXED PATH
-        console.log('Fetching chat history from:', url);
-        const response = await axios.get<ChatMessage[]>(url, {
+        const response = await axios.get<ChatMessage[]>(`${API_BASE_URL}/history`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setMessages(response.data.reverse());
         hasFetchedHistory.current = true;
-      } catch (error: unknown) {
-        console.error('Error fetching chat history:', error);
-        const errorMsg =
-          (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
-          'Failed to load chat history.';
+      } catch (error: any) {
+        const errorMsg = error?.response?.data?.error || 'Failed to load chat history.';
         setErrorMessage(errorMsg);
-        if (errorMsg === 'No token provided' || errorMsg === 'Invalid token') {
+        if (['No token provided', 'Invalid token'].includes(errorMsg)) {
           setTimeout(() => router.push('/login'), 2000);
         }
       }
     };
 
     fetchHistory();
-  }, [isChatOpen, API_BASE_URL, router]);
+  }, [isChatOpen]);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -101,35 +94,31 @@ export default function Home() {
       return;
     }
 
-    setIsLoading(true);
     const userMessage = inputMessage.trim();
     const tempMessage: ChatMessage = {
       message: userMessage,
       response: '',
       timestamp: new Date().toISOString(),
     };
+
     setMessages((prev) => [...prev, tempMessage]);
     setInputMessage('');
+    setIsLoading(true);
 
     try {
-      const url = `${API_BASE_URL}/message`; // ✅ FIXED PATH
-      console.log('Sending message to:', url);
-      const response = await axios.post<ChatMessage>(
-        url,
+      const res = await axios.post<ChatMessage>(
+        `${API_BASE_URL}/message`,
         { message: userMessage },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setMessages((prev) => [...prev.filter((m) => m !== tempMessage), response.data]);
-    } catch (error: unknown) {
-      console.error('Error sending message:', error);
-      const errorMsg =
-        (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
-        'Sorry, something went wrong. Please try again.';
+      setMessages((prev) => [...prev.filter((m) => m !== tempMessage), res.data]);
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.error || 'Sorry, something went wrong.';
       setMessages((prev) => [
         ...prev.filter((m) => m !== tempMessage),
-        { ...tempMessage, response: errorMsg },
+        { ...tempMessage, response: errorMsg, error: true },
       ]);
-      if (errorMsg === 'No token provided' || errorMsg === 'Invalid token') {
+      if (['No token provided', 'Invalid token'].includes(errorMsg)) {
         setTimeout(() => router.push('/login'), 2000);
       }
     } finally {
@@ -156,12 +145,10 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       <LiveDate />
       <Navbar />
-
       <main className="flex flex-col">
         <section ref={heroRef}>
           <VideoBackground />
         </section>
-
         <DirectorMessage />
         <DocumentTypesSlider />
         <StatsCounter />
@@ -169,6 +156,7 @@ export default function Home() {
         <CollegeInfo />
         <DataCenter />
 
+        {/* Call to Action */}
         <section ref={ctaRef} className="py-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -196,18 +184,16 @@ export default function Home() {
         </section>
       </main>
 
-      <div className="mt-8">
-        <FeedbackForm />
-      </div>
+      <FeedbackForm />
 
-      {/* AI Chatbot Icon */}
+      {/* Floating Chat Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <motion.button
           onClick={toggleChat}
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ duration: 0.3 }}
-          className="bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          className="bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
           aria-label="Open AI Chatbot"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -225,42 +211,38 @@ export default function Home() {
           transition={{ duration: 0.3 }}
           className="fixed bottom-20 right-6 w-80 bg-white rounded-lg shadow-xl z-50 flex flex-col max-h-[80vh]"
           role="dialog"
-          aria-label="Chatbot Window"
         >
           <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
             <h3 className="text-lg font-semibold">YCIS Chatbot</h3>
-            <button
-              onClick={toggleChat}
-              className="text-white hover:text-gray-200 focus:outline-none"
-              aria-label="Close Chat"
-            >
+            <button onClick={toggleChat} aria-label="Close Chat">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto bg-gray-50" aria-live="polite">
+          <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto bg-gray-50">
             {messages.length === 0 && !errorMessage && (
               <p className="text-gray-500 text-center">Start a conversation!</p>
             )}
             {errorMessage && (
               <div className="text-left mb-4">
                 <p className="inline-block bg-red-100 text-red-800 rounded-lg px-3 py-2 max-w-[70%]">{errorMessage}</p>
-                <p className="text-xs text-gray-500 mt-1">{new Date().toLocaleTimeString()}</p>
               </div>
             )}
-            {messages.map((msg, index) => (
-              <div key={index} className="mb-4">
+            {messages.map((msg, i) => (
+              <div key={i} className="mb-4">
                 {msg.message && (
                   <div className="text-right">
                     <p className="inline-block bg-blue-100 text-blue-800 rounded-lg px-3 py-2 max-w-[70%]">{msg.message}</p>
-                    <p className="text-xs text-gray-500 mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</p>
                   </div>
                 )}
                 {msg.response && (
                   <div className="text-left mt-2">
-                    <p className="inline-block bg-gray-200 text-gray-800 rounded-lg px-3 py-2 max-w-[70%]">{msg.response}</p>
-                    <p className="text-xs text-gray-500 mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</p>
+                    <p className={`inline-block px-3 py-2 rounded-lg max-w-[70%] ${
+                      msg.error ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-800'
+                    }`}>
+                      {msg.response}
+                    </p>
                   </div>
                 )}
               </div>
@@ -275,13 +257,12 @@ export default function Home() {
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Type your message..."
-                className="flex-1 p-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                className="flex-1 p-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={isLoading}
-                aria-label="Chat input"
               />
               <button
                 onClick={sendMessage}
-                className="bg-blue-600 text-white p-2 rounded-r-lg hover:bg-blue-700 focus:outline-none disabled:opacity-50"
+                className="bg-blue-600 text-white p-2 rounded-r-lg hover:bg-blue-700"
                 disabled={isLoading}
                 aria-label="Send message"
               >
