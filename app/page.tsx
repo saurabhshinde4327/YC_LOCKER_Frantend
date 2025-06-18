@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useInView } from 'react-intersection-observer'
 import { useState, useEffect, useRef } from 'react'
-import axios, { AxiosError } from 'axios'
+import axios from 'axios'
 import LiveDate from './components/LiveDate'
 import DocumentTypesSlider from './components/DocumentTypesSlider'
 import DataCenter from './components/DataCenter'
@@ -20,6 +20,10 @@ interface ChatMessage {
   message: string
   response: string
   timestamp: string
+}
+
+interface ErrorResponse {
+  error?: string
 }
 
 export default function Home() {
@@ -60,15 +64,16 @@ export default function Home() {
             headers: { Authorization: `Bearer ${token}` },
           })
           setMessages(response.data.reverse()) // Reverse to show oldest first
-        } catch (error: AxiosError) {
+        } catch (error: unknown) {
           console.error('Error fetching chat history:', error)
+          const errorMessage =
+            (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
+            'Failed to load chat history.'
           setMessages((prev) => [
             ...prev,
             {
               message: '',
-              response:
-                (error.response?.data as { error?: string })?.error ||
-                'Failed to load chat history.',
+              response: errorMessage,
               timestamp: new Date().toISOString(),
             },
           ])
@@ -115,15 +120,16 @@ export default function Home() {
       )
       setMessages((prev) => [...prev, response.data])
       setInputMessage('')
-    } catch (error: AxiosError) {
+    } catch (error: unknown) {
       console.error('Error sending message:', error)
+      const errorMessage =
+        (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
+        'Sorry, something went wrong. Please try again.'
       setMessages((prev) => [
         ...prev,
         {
           message: userMessage,
-          response:
-            (error.response?.data as { error?: string })?.error ||
-            'Sorry, something went wrong. Please try again.',
+          response: errorMessage,
           timestamp: new Date().toISOString(),
         },
       ])
