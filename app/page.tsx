@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useInView } from 'react-intersection-observer'
@@ -27,6 +29,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
   // Retrieve JWT token (adjust based on your auth setup)
@@ -36,15 +39,38 @@ export default function Home() {
 
   // Fetch chat history when chat opens
   useEffect(() => {
-    if (isChatOpen) {
+    if (isChatOpen && !isFetchingHistory) {
       const fetchHistory = async () => {
+        const token = getToken()
+        if (!token) {
+          setMessages([
+            {
+              message: '',
+              response: 'Please log in to use the chatbot.',
+              timestamp: new Date().toISOString(),
+            },
+          ])
+          return
+        }
+
+        setIsFetchingHistory(true)
         try {
           const response = await axios.get('/api/chat/history', {
-            headers: { Authorization: `Bearer ${getToken()}` },
+            headers: { Authorization: `Bearer ${token}` },
           })
           setMessages(response.data.reverse()) // Reverse to show oldest first
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error fetching chat history:', error)
+          setMessages([
+            ...messages,
+            {
+              message: '',
+              response: error.response?.data?.error || 'Failed to load chat history.',
+              timestamp: new Date().toISOString(),
+            },
+          ])
+        } finally {
+          setIsFetchingHistory(false)
         }
       }
       fetchHistory()
@@ -62,22 +88,37 @@ export default function Home() {
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return
 
-    setIsLoading(true)
-    try {
-      const response = await axios.post(
-        '/api/chat/message',
-        { message: inputMessage },
-        { headers: { Authorization: `Bearer ${getToken()}` } }
-      )
-      setMessages([...messages, response.data])
-      setInputMessage('')
-    } catch (error) {
-      console.error('Error sending message:', error)
+    const token = getToken()
+    if (!token) {
       setMessages([
         ...messages,
         {
           message: inputMessage,
-          response: 'Sorry, something went wrong. Please try again.',
+          response: 'Please log in to use the chatbot.',
+          timestamp: new Date().toISOString(),
+        },
+      ])
+      setInputMessage('')
+      return
+    }
+
+    setIsLoading(true)
+    const userMessage = inputMessage.trim()
+    try {
+      const response = await axios.post(
+        '/api/chat/message',
+        { message: userMessage },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      setMessages([...messages, response.data])
+      setInputMessage('')
+    } catch (error: any) {
+      console.error('Error sending message:', error)
+      setMessages([
+        ...messages,
+        {
+          message: userMessage,
+          response: error.response?.data?.error || 'Sorry, something went wrong. Please try again.',
           timestamp: new Date().toISOString(),
         },
       ])
@@ -96,7 +137,7 @@ export default function Home() {
 
   // Toggle chat window
   const toggleChat = () => {
-    setIsChatOpen(!isChatOpen)
+    setIsChatOpen((prev) => !prev)
   }
 
   return (
@@ -183,6 +224,8 @@ export default function Home() {
           exit={{ opacity: 0, y: 20 }}
           transition={{ duration: 0.3 }}
           className="fixed bottom-20 right-6 w-80 bg-white rounded-lg shadow-xl z-50 flex flex-col max-h-[80vh]"
+          role="dialog"
+          aria-label="Chatbot Window"
         >
           <div className="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center">
             <h3 className="text-lg font-semibold">YCIS Chatbot</h3>
@@ -199,20 +242,26 @@ export default function Home() {
           <div
             ref={chatContainerRef}
             className="flex-1 p-4 overflow-y-auto bg-gray-50"
+            aria-live="polite"
           >
-            {messages.length === 0 && (
+            {isFetchingHistory && (
+              <p className="text-gray-500 text-center">Loading history...</p>
+            )}
+            {!isFetchingHistory && messages.length === 0 && (
               <p className="text-gray-500 text-center">Start a conversation!</p>
             )}
             {messages.map((msg, index) => (
               <div key={index} className="mb-4">
-                <div className="text-right">
-                  <p className="inline-block bg-blue-100 text-blue-800 rounded-lg px-3 py-2 max-w-[70%]">
-                    {msg.message}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
-                  </p>
-                </div>
+                {msg.message && (
+                  <div className="text-right">
+                    <p className="inline-block bg-blue-100 text-blue-800 rounded-lg px-3 py-2 max-w-[70%]">
+                      {msg.message}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
+                )}
                 <div className="text-left mt-2">
                   <p className="inline-block bg-gray-200 text-gray-800 rounded-lg px-3 py-2 max-w-[70%]">
                     {msg.response}
@@ -235,13 +284,15 @@ export default function Home() {
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Type your message..."
-                className="flex-1 p-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 p-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 disabled={isLoading}
+                aria-label="Chat input"
               />
               <button
                 onClick={sendMessage}
-                className="bg-blue-600 text-white p-2 rounded-r-lg hover:bg-blue-700 focus:outline-none"
+                className="bg-blue-600 text-white p-2 rounded-r-lg hover:bg-blue-700 focus:outline-none disabled:opacity-50"
                 disabled={isLoading}
+                aria-label="Send message"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
