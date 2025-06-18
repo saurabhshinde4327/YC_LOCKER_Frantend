@@ -389,6 +389,10 @@
     bottom: calc(var(--spacing) * 6);
   }
 
+  .bottom-20 {
+    bottom: calc(var(--spacing) * 20);
+  }
+
   .left-0 {
     left: calc(var(--spacing) * 0);
   }
@@ -615,6 +619,10 @@
     height: 100%;
   }
 
+  .max-h-\[80vh\] {
+    max-height: 80vh;
+  }
+
   .min-h-screen {
     min-height: 100vh;
   }
@@ -663,6 +671,10 @@
     width: calc(var(--spacing) * 64);
   }
 
+  .w-80 {
+    width: calc(var(--spacing) * 80);
+  }
+
   .w-full {
     width: 100%;
   }
@@ -685,6 +697,10 @@
 
   .max-w-7xl {
     max-width: var(--container-7xl);
+  }
+
+  .max-w-\[70\%\] {
+    max-width: 70%;
   }
 
   .max-w-md {
@@ -864,6 +880,10 @@
     overflow-x: auto;
   }
 
+  .overflow-y-auto {
+    overflow-y: auto;
+  }
+
   .rounded-2xl {
     border-radius: var(--radius-2xl);
   }
@@ -890,6 +910,21 @@
 
   .rounded-xl {
     border-radius: var(--radius-xl);
+  }
+
+  .rounded-t-lg {
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+  }
+
+  .rounded-l-lg {
+    border-top-left-radius: var(--radius-lg);
+    border-bottom-left-radius: var(--radius-lg);
+  }
+
+  .rounded-r-lg {
+    border-top-right-radius: var(--radius-lg);
+    border-bottom-right-radius: var(--radius-lg);
   }
 
   .border {
@@ -1848,6 +1883,12 @@
   @media (hover: hover) {
     .hover\:text-blue-900:hover {
       color: var(--color-blue-900);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:text-gray-200:hover {
+      color: var(--color-gray-200);
     }
   }
 
