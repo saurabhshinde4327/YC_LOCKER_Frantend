@@ -1,51 +1,58 @@
-'use client'
+'use client';
 
-import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { useInView } from 'react-intersection-observer'
-import { useState, useEffect, useRef } from 'react'
-import axios from 'axios'
-import LiveDate from './components/LiveDate'
-import DocumentTypesSlider from './components/DocumentTypesSlider'
-import DataCenter from './components/DataCenter'
-import UploadSteps from './components/UploadSteps'
-import StatsCounter from './components/StatsCounter'
-import DirectorMessage from './components/DirectorMessage'
-import Navbar from './components/Navbar'
-import CollegeInfo from './components/CollegeInfo'
-import FeedbackForm from '@/app/components/FeedbackForm'
-import VideoBackground from './components/VideoBackground'
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { useInView } from 'react-intersection-observer';
+import { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import LiveDate from './components/LiveDate';
+import DocumentTypesSlider from './components/DocumentTypesSlider';
+import DataCenter from './components/DataCenter';
+import UploadSteps from './components/UploadSteps';
+import StatsCounter from './components/StatsCounter';
+import DirectorMessage from './components/DirectorMessage';
+import Navbar from './components/Navbar';
+import CollegeInfo from './components/CollegeInfo';
+import FeedbackForm from '@/app/components/FeedbackForm';
+import VideoBackground from './components/VideoBackground';
 
 interface ChatMessage {
-  message: string
-  response: string
-  timestamp: string
+  message: string;
+  response: string;
+  timestamp: string;
 }
 
 interface ErrorResponse {
-  error?: string
+  error?: string;
 }
 
 export default function Home() {
-  const [heroRef] = useInView({ triggerOnce: true })
-  const [ctaRef, ctaInView] = useInView({ triggerOnce: true })
-  const [isChatOpen, setIsChatOpen] = useState(false)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [inputMessage, setInputMessage] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [isFetchingHistory, setIsFetchingHistory] = useState(false)
-  const chatContainerRef = useRef<HTMLDivElement>(null)
+  const [heroRef] = useInView({ triggerOnce: true });
+  const [ctaRef, ctaInView] = useInView({ triggerOnce: true });
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Retrieve JWT token (adjust based on your auth setup)
+  // Base API URL from environment variable
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ycislocker.space/api';
+
+  // Retrieve JWT token
   const getToken = () => {
-    return localStorage.getItem('token') || ''
-  }
+    const token = localStorage.getItem('token') || '';
+    if (!token) {
+      console.warn('No JWT token found in localStorage');
+    }
+    return token;
+  };
 
   // Fetch chat history when chat opens
   useEffect(() => {
     if (isChatOpen && !isFetchingHistory) {
       const fetchHistory = async () => {
-        const token = getToken()
+        const token = getToken();
         if (!token) {
           setMessages((prev) => [
             ...prev,
@@ -54,21 +61,23 @@ export default function Home() {
               response: 'Please log in to use the chatbot.',
               timestamp: new Date().toISOString(),
             },
-          ])
-          return
+          ]);
+          return;
         }
 
-        setIsFetchingHistory(true)
+        setIsFetchingHistory(true);
         try {
-          const response = await axios.get<ChatMessage[]>('/api/chat/history', {
+          const url = `${API_BASE_URL}/chatBackend/history`;
+          console.log('Fetching chat history from:', url); // Debug
+          const response = await axios.get<ChatMessage[]>(url, {
             headers: { Authorization: `Bearer ${token}` },
-          })
-          setMessages(response.data.reverse()) // Reverse to show oldest first
+          });
+          setMessages(response.data.reverse()); // Reverse to show oldest first
         } catch (error: unknown) {
-          console.error('Error fetching chat history:', error)
+          console.error('Error fetching chat history:', error);
           const errorMessage =
             (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
-            'Failed to load chat history.'
+            'Failed to load chat history.';
           setMessages((prev) => [
             ...prev,
             {
@@ -76,27 +85,27 @@ export default function Home() {
               response: errorMessage,
               timestamp: new Date().toISOString(),
             },
-          ])
+          ]);
         } finally {
-          setIsFetchingHistory(false)
+          setIsFetchingHistory(false);
         }
-      }
-      fetchHistory()
+      };
+      fetchHistory();
     }
-  }, [isChatOpen, isFetchingHistory])
+  }, [isChatOpen, isFetchingHistory, API_BASE_URL]);
 
   // Scroll to bottom of chat when new messages are added
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages])
+  }, [messages]);
 
   // Send message to backend
   const sendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return
+    if (!inputMessage.trim() || isLoading) return;
 
-    const token = getToken()
+    const token = getToken();
     if (!token) {
       setMessages((prev) => [
         ...prev,
@@ -105,26 +114,28 @@ export default function Home() {
           response: 'Please log in to use the chatbot.',
           timestamp: new Date().toISOString(),
         },
-      ])
-      setInputMessage('')
-      return
+      ]);
+      setInputMessage('');
+      return;
     }
 
-    setIsLoading(true)
-    const userMessage = inputMessage.trim()
+    setIsLoading(true);
+    const userMessage = inputMessage.trim();
     try {
+      const url = `${API_BASE_URL}/chatBackend/message`;
+      console.log('Sending message to:', url); // Debug
       const response = await axios.post<ChatMessage>(
-        '/api/chat/message',
+        url,
         { message: userMessage },
         { headers: { Authorization: `Bearer ${token}` } }
-      )
-      setMessages((prev) => [...prev, response.data])
-      setInputMessage('')
+      );
+      setMessages((prev) => [...prev, response.data]);
+      setInputMessage('');
     } catch (error: unknown) {
-      console.error('Error sending message:', error)
+      console.error('Error sending message:', error);
       const errorMessage =
         (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
-        'Sorry, something went wrong. Please try again.'
+        'Sorry, something went wrong. Please try again.';
       setMessages((prev) => [
         ...prev,
         {
@@ -132,24 +143,24 @@ export default function Home() {
           response: errorMessage,
           timestamp: new Date().toISOString(),
         },
-      ])
+      ]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   // Handle Enter key press
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
+      e.preventDefault();
+      sendMessage();
     }
-  }
+  };
 
   // Toggle chat window
   const toggleChat = () => {
-    setIsChatOpen((prev) => !prev)
-  }
+    setIsChatOpen((prev) => !prev);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -221,8 +232,19 @@ export default function Home() {
           className="bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           aria-label="Open AI Chatbot"
         >
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          <svg
+            className="w-8 h-8"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+            />
           </svg>
         </motion.button>
       </div>
@@ -250,14 +272,8 @@ export default function Home() {
               </svg>
             </button>
           </div>
-          <div
-            ref={chatContainerRef}
-            className="flex-1 p-4 overflow-y-auto bg-gray-50"
-            aria-live="polite"
-          >
-            {isFetchingHistory && (
-              <p className="text-gray-500 text-center">Loading history...</p>
-            )}
+          <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto bg-gray-50" aria-live="polite">
+            {isFetchingHistory && <p className="text-gray-500 text-center">Loading history...</p>}
             {!isFetchingHistory && messages.length === 0 && (
               <p className="text-gray-500 text-center">Start a conversation!</p>
             )}
@@ -283,9 +299,7 @@ export default function Home() {
                 </div>
               </div>
             ))}
-            {isLoading && (
-              <p className="text-gray-500 text-center">Typing...</p>
-            )}
+            {isLoading && <p className="text-gray-500 text-center">Typing...</p>}
           </div>
           <div className="p-4 border-t bg-white">
             <div className="flex items-center">
@@ -306,7 +320,12 @@ export default function Home() {
                 aria-label="Send message"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
                 </svg>
               </button>
             </div>
@@ -318,5 +337,5 @@ export default function Home() {
         <div className="container mx-auto px-6 py-12"></div>
       </footer>
     </div>
-  )
+  );
 }
