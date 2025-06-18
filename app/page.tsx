@@ -1,4 +1,4 @@
-'use client';
+// 'use client';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -39,24 +39,19 @@ export default function Home() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasFetchedHistory = useRef(false);
 
-  // Base API URL
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend.ycislocker.space/api';
 
-  // Retrieve JWT token
   const getToken = () => {
     const token = localStorage.getItem('token') || '';
-    console.log('JWT Token:', token); // Debug
+    console.log('JWT Token:', token);
     if (!token) {
       console.warn('No JWT token found in localStorage');
     }
     return token;
   };
 
-  // Fetch chat history when chat opens
   useEffect(() => {
-    if (!isChatOpen || hasFetchedHistory.current) {
-      return;
-    }
+    if (!isChatOpen || hasFetchedHistory.current) return;
 
     const fetchHistory = async () => {
       const token = getToken();
@@ -67,7 +62,7 @@ export default function Home() {
       }
 
       try {
-        const url = `${API_BASE_URL}/chatBackend/history`;
+        const url = `${API_BASE_URL}/history`; // ✅ FIXED PATH
         console.log('Fetching chat history from:', url);
         const response = await axios.get<ChatMessage[]>(url, {
           headers: { Authorization: `Bearer ${token}` },
@@ -89,14 +84,12 @@ export default function Home() {
     fetchHistory();
   }, [isChatOpen, API_BASE_URL, router]);
 
-  // Scroll to bottom of chat
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Send message to backend
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -119,7 +112,7 @@ export default function Home() {
     setInputMessage('');
 
     try {
-      const url = `${API_BASE_URL}/chatBackend/message`;
+      const url = `${API_BASE_URL}/message`; // ✅ FIXED PATH
       console.log('Sending message to:', url);
       const response = await axios.post<ChatMessage>(
         url,
@@ -144,7 +137,6 @@ export default function Home() {
     }
   };
 
-  // Handle Enter key press
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -152,7 +144,6 @@ export default function Home() {
     }
   };
 
-  // Toggle chat window
   const toggleChat = () => {
     setIsChatOpen((prev) => !prev);
     if (!isChatOpen) {
@@ -186,10 +177,8 @@ export default function Home() {
             className="container mx-auto px-6"
           >
             <div className="relative rounded-3xl overflow-hidden">
-              <div className="absolute inset-0">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 mix-blend-multiply" />
-                <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
-              </div>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 mix-blend-multiply" />
+              <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
               <div className="relative text-center py-16 px-6">
                 <h2 className="text-3xl font-bold text-white mb-8">Ready to Get Started?</h2>
                 <Link
@@ -197,18 +186,8 @@ export default function Home() {
                   className="inline-flex items-center px-8 py-4 text-lg font-medium text-blue-600 bg-white rounded-full hover:bg-gray-50 transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 group"
                 >
                   Create Your Account
-                  <svg
-                    className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M14 5l7 7m0 0l-7 7m7-7H3"
-                    />
+                  <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
                 </Link>
               </div>
@@ -231,19 +210,8 @@ export default function Home() {
           className="bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           aria-label="Open AI Chatbot"
         >
-          <svg
-            className="w-8 h-8"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
         </motion.button>
       </div>
@@ -277,9 +245,7 @@ export default function Home() {
             )}
             {errorMessage && (
               <div className="text-left mb-4">
-                <p className="inline-block bg-red-100 text-red-800 rounded-lg px-3 py-2 max-w-[70%]">
-                  {errorMessage}
-                </p>
+                <p className="inline-block bg-red-100 text-red-800 rounded-lg px-3 py-2 max-w-[70%]">{errorMessage}</p>
                 <p className="text-xs text-gray-500 mt-1">{new Date().toLocaleTimeString()}</p>
               </div>
             )}
@@ -287,22 +253,14 @@ export default function Home() {
               <div key={index} className="mb-4">
                 {msg.message && (
                   <div className="text-right">
-                    <p className="inline-block bg-blue-100 text-blue-800 rounded-lg px-3 py-2 max-w-[70%]">
-                      {msg.message}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(msg.timestamp).toLocaleTimeString()}
-                    </p>
+                    <p className="inline-block bg-blue-100 text-blue-800 rounded-lg px-3 py-2 max-w-[70%]">{msg.message}</p>
+                    <p className="text-xs text-gray-500 mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</p>
                   </div>
                 )}
                 {msg.response && (
                   <div className="text-left mt-2">
-                    <p className="inline-block bg-gray-200 text-gray-800 rounded-lg px-3 py-2 max-w-[70%]">
-                      {msg.response}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(msg.timestamp).toLocaleTimeString()}
-                    </p>
+                    <p className="inline-block bg-gray-200 text-gray-800 rounded-lg px-3 py-2 max-w-[70%]">{msg.response}</p>
+                    <p className="text-xs text-gray-500 mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</p>
                   </div>
                 )}
               </div>
@@ -328,12 +286,7 @@ export default function Home() {
                 aria-label="Send message"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
             </div>
