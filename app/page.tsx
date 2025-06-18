@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Import useRouter for redirection
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
 import { useState, useEffect, useRef } from 'react';
@@ -27,21 +28,24 @@ interface ErrorResponse {
 }
 
 export default function Home() {
+  const router = useRouter(); // For redirecting to login
   const [heroRef] = useInView({ triggerOnce: true });
   const [ctaRef, ctaInView] = useInView({ triggerOnce: true });
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const hasFetchedHistory = useRef(false);
 
-  // Base API URL from environment variable
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ycislocker.space/api';
+  // Base API URL
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend.ycislocker.space/api';
 
   // Retrieve JWT token
   const getToken = () => {
     const token = localStorage.getItem('token') || '';
+    console.log('JWT Token:', token); // Debug token
     if (!token) {
       console.warn('No JWT token found in localStorage');
     }
@@ -50,51 +54,46 @@ export default function Home() {
 
   // Fetch chat history when chat opens
   useEffect(() => {
-    if (isChatOpen && !isFetchingHistory) {
-      const fetchHistory = async () => {
-        const token = getToken();
-        if (!token) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              message: '',
-              response: 'Please log in to use the chatbot.',
-              timestamp: new Date().toISOString(),
-            },
-          ]);
-          return;
-        }
-
-        setIsFetchingHistory(true);
-        try {
-          const url = `${API_BASE_URL}/chatBackend/history`;
-          console.log('Fetching chat history from:', url); // Debug
-          const response = await axios.get<ChatMessage[]>(url, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          setMessages(response.data.reverse()); // Reverse to show oldest first
-        } catch (error: unknown) {
-          console.error('Error fetching chat history:', error);
-          const errorMessage =
-            (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
-            'Failed to load chat history.';
-          setMessages((prev) => [
-            ...prev,
-            {
-              message: '',
-              response: errorMessage,
-              timestamp: new Date().toISOString(),
-            },
-          ]);
-        } finally {
-          setIsFetchingHistory(false);
-        }
-      };
-      fetchHistory();
+    if (!isChatOpen || hasFetchedHistory.current) {
+      return; // Prevent fetching if chat is closed or already fetched
     }
-  }, [isChatOpen, isFetchingHistory, API_BASE_URL]);
 
-  // Scroll to bottom of chat when new messages are added
+    const fetchHistory = async () => {
+      const token = getToken();
+      if (!token) {
+        setErrorMessage('Please log in to use the chatbot.');
+        setTimeout(() => {
+          router.push('/login'); // Redirect to login page
+        }, 2000);
+        return;
+      }
+
+      try {
+        const url = `${API_BASE_URL}/chatBackend/history`;
+        console.log('Fetching chat history from:', url);
+        const response = await axios.get<ChatMessage[]>(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setMessages(response.data.reverse());
+        hasFetchedHistory.current = true;
+      } catch (error: unknown) {
+        console.error('Error fetching chat history:', error);
+        const errorMsg =
+          (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
+          'Failed to load chat history.';
+        setErrorMessage(errorMsg);
+        if (errorMsg === 'No token provided' || errorMsg === 'Invalid token') {
+          setTimeout(() => {
+            router.push('/login');
+          }, 2000);
+        }
+      }
+    };
+
+    fetchHistory();
+  }, [isChatOpen, API_BASE_URL, router]);
+
+  // Scroll to bottom of chat when messages change
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -107,43 +106,47 @@ export default function Home() {
 
     const token = getToken();
     if (!token) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          message: inputMessage,
-          response: 'Please log in to use the chatbot.',
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      setErrorMessage('Please log in to use the chatbot.');
       setInputMessage('');
+      setTimeout(() => {
+        router.push('/login');
+      }, 2000);
       return;
     }
 
     setIsLoading(true);
     const userMessage = inputMessage.trim();
+    const tempMessage: ChatMessage = {
+      message: userMessage,
+      response: '',
+      timestamp: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMessage]);
+    setInputMessage('');
+
     try {
       const url = `${API_BASE_URL}/chatBackend/message`;
-      console.log('Sending message to:', url); // Debug
+      console.log('Sending message to:', url);
       const response = await axios.post<ChatMessage>(
         url,
         { message: userMessage },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setMessages((prev) => [...prev, response.data]);
-      setInputMessage('');
+      setMessages((prev) => [...prev.filter((m) => m !== tempMessage), response.data]);
     } catch (error: unknown) {
       console.error('Error sending message:', error);
-      const errorMessage =
-        (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
-        'Sorry, something went wrong. Please try again.';
+      const errorMsg =
+        (error as { response?: { data?: ErrorResponse } })?.response?.data?. (`error` ||
+        'Sorry, something went wrong. Please try again.');
       setMessages((prev) => [
-        ...prev,
-        {
-          message: userMessage,
-          response: errorMessage,
-          timestamp: new Date().toISOString(),
-        },
+        ...prev.filter((m) => m !== tempMessage),
+        { ...tempMessage, response: errorMsg },
       ]);
+      if (errorMsg === 'No token provided' || errorMsg === 'Invalid token') {
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -160,6 +163,10 @@ export default function Home() {
   // Toggle chat window
   const toggleChat = () => {
     setIsChatOpen((prev) => !prev);
+    if (!isChatOpen) {
+      setErrorMessage(null);
+      hasFetchedHistory.current = false;
+    }
   };
 
   return (
@@ -273,9 +280,16 @@ export default function Home() {
             </button>
           </div>
           <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto bg-gray-50" aria-live="polite">
-            {isFetchingHistory && <p className="text-gray-500 text-center">Loading history...</p>}
-            {!isFetchingHistory && messages.length === 0 && (
+            {messages.length === 0 && !errorMessage && (
               <p className="text-gray-500 text-center">Start a conversation!</p>
+            )}
+            {errorMessage && (
+              <div className="text-left mb-4">
+                <p className="inline-block bg-red-100 text-red-800 rounded-lg px-3 py-2 max-w-[70%]">
+                  {errorMessage}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">{new Date().toLocaleTimeString()}</p>
+              </div>
             )}
             {messages.map((msg, index) => (
               <div key={index} className="mb-4">
@@ -289,14 +303,16 @@ export default function Home() {
                     </p>
                   </div>
                 )}
-                <div className="text-left mt-2">
-                  <p className="inline-block bg-gray-200 text-gray-800 rounded-lg px-3 py-2 max-w-[70%]">
-                    {msg.response}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
-                  </p>
-                </div>
+                {msg.response && (
+                  <div className="text-left mt-2">
+                    <p className="inline-block bg-gray-200 text-gray-800 rounded-lg px-3 py-2 max-w-[70%]">
+                      {msg.response}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
             {isLoading && <p className="text-gray-500 text-center">Typing...</p>}
