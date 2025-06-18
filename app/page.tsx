@@ -25,10 +25,6 @@ interface ChatMessage {
   error?: boolean;
 }
 
-interface ErrorResponse {
-  error?: string;
-}
-
 export default function Home() {
   const router = useRouter();
   const [heroRef] = useInView({ triggerOnce: true });
@@ -44,8 +40,7 @@ export default function Home() {
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend.ycislocker.space/api';
 
   const getToken = () => {
-    const token = localStorage.getItem('token') || '';
-    return token;
+    return localStorage.getItem('token') || '';
   };
 
   useEffect(() => {
@@ -60,22 +55,25 @@ export default function Home() {
       }
 
       try {
-        const response = await axios.get<ChatMessage[]>(`${API_BASE_URL}/history`, {
+        const response = await axios.get<ChatMessage[]>(`${API_BASE_URL}/chat/history`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setMessages(response.data.reverse());
         hasFetchedHistory.current = true;
-      } catch (error: any) {
-        const errorMsg = error?.response?.data?.error || 'Failed to load chat history.';
+      } catch (error: unknown) {
+        let errorMsg = 'Failed to load chat history.';
+        if (axios.isAxiosError(error) && error.response?.data?.error) {
+          errorMsg = error.response.data.error;
+        }
         setErrorMessage(errorMsg);
-        if (['No token provided', 'Invalid token'].includes(errorMsg)) {
+        if (["No token provided", "Invalid token"].includes(errorMsg)) {
           setTimeout(() => router.push('/login'), 2000);
         }
       }
     };
 
     fetchHistory();
-  }, [isChatOpen]);
+  }, [isChatOpen, API_BASE_URL, router]);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -107,18 +105,21 @@ export default function Home() {
 
     try {
       const res = await axios.post<ChatMessage>(
-        `${API_BASE_URL}/message`,
+        `${API_BASE_URL}/chat/message`,
         { message: userMessage },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setMessages((prev) => [...prev.filter((m) => m !== tempMessage), res.data]);
-    } catch (error: any) {
-      const errorMsg = error?.response?.data?.error || 'Sorry, something went wrong.';
+    } catch (error: unknown) {
+      let errorMsg = 'Sorry, something went wrong.';
+      if (axios.isAxiosError(error) && error.response?.data?.error) {
+        errorMsg = error.response.data.error;
+      }
       setMessages((prev) => [
         ...prev.filter((m) => m !== tempMessage),
         { ...tempMessage, response: errorMsg, error: true },
       ]);
-      if (['No token provided', 'Invalid token'].includes(errorMsg)) {
+      if (["No token provided", "Invalid token"].includes(errorMsg)) {
         setTimeout(() => router.push('/login'), 2000);
       }
     } finally {
@@ -156,7 +157,6 @@ export default function Home() {
         <CollegeInfo />
         <DataCenter />
 
-        {/* Call to Action */}
         <section ref={ctaRef} className="py-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -186,7 +186,6 @@ export default function Home() {
 
       <FeedbackForm />
 
-      {/* Floating Chat Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <motion.button
           onClick={toggleChat}
@@ -202,7 +201,6 @@ export default function Home() {
         </motion.button>
       </div>
 
-      {/* Chat Window */}
       {isChatOpen && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -238,9 +236,7 @@ export default function Home() {
                 )}
                 {msg.response && (
                   <div className="text-left mt-2">
-                    <p className={`inline-block px-3 py-2 rounded-lg max-w-[70%] ${
-                      msg.error ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-800'
-                    }`}>
+                    <p className={`inline-block px-3 py-2 rounded-lg max-w-[70%] ${msg.error ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-800'}`}>
                       {msg.response}
                     </p>
                   </div>
