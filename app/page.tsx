@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useInView } from 'react-intersection-observer'
 import { useState, useEffect, useRef } from 'react'
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 import LiveDate from './components/LiveDate'
 import DocumentTypesSlider from './components/DocumentTypesSlider'
 import DataCenter from './components/DataCenter'
@@ -43,7 +43,8 @@ export default function Home() {
       const fetchHistory = async () => {
         const token = getToken()
         if (!token) {
-          setMessages([
+          setMessages((prev) => [
+            ...prev,
             {
               message: '',
               response: 'Please log in to use the chatbot.',
@@ -55,17 +56,19 @@ export default function Home() {
 
         setIsFetchingHistory(true)
         try {
-          const response = await axios.get('/api/chat/history', {
+          const response = await axios.get<ChatMessage[]>('/api/chat/history', {
             headers: { Authorization: `Bearer ${token}` },
           })
           setMessages(response.data.reverse()) // Reverse to show oldest first
-        } catch (error: any) {
+        } catch (error: AxiosError) {
           console.error('Error fetching chat history:', error)
-          setMessages([
-            ...messages,
+          setMessages((prev) => [
+            ...prev,
             {
               message: '',
-              response: error.response?.data?.error || 'Failed to load chat history.',
+              response:
+                (error.response?.data as { error?: string })?.error ||
+                'Failed to load chat history.',
               timestamp: new Date().toISOString(),
             },
           ])
@@ -75,7 +78,7 @@ export default function Home() {
       }
       fetchHistory()
     }
-  }, [isChatOpen])
+  }, [isChatOpen, isFetchingHistory])
 
   // Scroll to bottom of chat when new messages are added
   useEffect(() => {
@@ -90,8 +93,8 @@ export default function Home() {
 
     const token = getToken()
     if (!token) {
-      setMessages([
-        ...messages,
+      setMessages((prev) => [
+        ...prev,
         {
           message: inputMessage,
           response: 'Please log in to use the chatbot.',
@@ -105,20 +108,22 @@ export default function Home() {
     setIsLoading(true)
     const userMessage = inputMessage.trim()
     try {
-      const response = await axios.post(
+      const response = await axios.post<ChatMessage>(
         '/api/chat/message',
         { message: userMessage },
         { headers: { Authorization: `Bearer ${token}` } }
       )
-      setMessages([...messages, response.data])
+      setMessages((prev) => [...prev, response.data])
       setInputMessage('')
-    } catch (error: any) {
+    } catch (error: AxiosError) {
       console.error('Error sending message:', error)
-      setMessages([
-        ...messages,
+      setMessages((prev) => [
+        ...prev,
         {
           message: userMessage,
-          response: error.response?.data?.error || 'Sorry, something went wrong. Please try again.',
+          response:
+            (error.response?.data as { error?: string })?.error ||
+            'Sorry, something went wrong. Please try again.',
           timestamp: new Date().toISOString(),
         },
       ])
