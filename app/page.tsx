@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // Import useRouter for redirection
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
 import { useState, useEffect, useRef } from 'react';
@@ -28,7 +28,7 @@ interface ErrorResponse {
 }
 
 export default function Home() {
-  const router = useRouter(); // For redirecting to login
+  const router = useRouter();
   const [heroRef] = useInView({ triggerOnce: true });
   const [ctaRef, ctaInView] = useInView({ triggerOnce: true });
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -45,7 +45,7 @@ export default function Home() {
   // Retrieve JWT token
   const getToken = () => {
     const token = localStorage.getItem('token') || '';
-    console.log('JWT Token:', token); // Debug token
+    console.log('JWT Token:', token); // Debug
     if (!token) {
       console.warn('No JWT token found in localStorage');
     }
@@ -55,16 +55,14 @@ export default function Home() {
   // Fetch chat history when chat opens
   useEffect(() => {
     if (!isChatOpen || hasFetchedHistory.current) {
-      return; // Prevent fetching if chat is closed or already fetched
+      return;
     }
 
     const fetchHistory = async () => {
       const token = getToken();
       if (!token) {
         setErrorMessage('Please log in to use the chatbot.');
-        setTimeout(() => {
-          router.push('/login'); // Redirect to login page
-        }, 2000);
+        setTimeout(() => router.push('/login'), 2000);
         return;
       }
 
@@ -83,9 +81,7 @@ export default function Home() {
           'Failed to load chat history.';
         setErrorMessage(errorMsg);
         if (errorMsg === 'No token provided' || errorMsg === 'Invalid token') {
-          setTimeout(() => {
-            router.push('/login');
-          }, 2000);
+          setTimeout(() => router.push('/login'), 2000);
         }
       }
     };
@@ -93,7 +89,7 @@ export default function Home() {
     fetchHistory();
   }, [isChatOpen, API_BASE_URL, router]);
 
-  // Scroll to bottom of chat when messages change
+  // Scroll to bottom of chat
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -108,9 +104,7 @@ export default function Home() {
     if (!token) {
       setErrorMessage('Please log in to use the chatbot.');
       setInputMessage('');
-      setTimeout(() => {
-        router.push('/login');
-      }, 2000);
+      setTimeout(() => router.push('/login'), 2000);
       return;
     }
 
@@ -136,16 +130,14 @@ export default function Home() {
     } catch (error: unknown) {
       console.error('Error sending message:', error);
       const errorMsg =
-        (error as { response?: { data?: ErrorResponse } })?.response?.data?. (`error` ||
-        'Sorry, something went wrong. Please try again.');
+        (error as { response?: { data?: ErrorResponse } })?.response?.data?.error ||
+        'Sorry, something went wrong. Please try again.';
       setMessages((prev) => [
         ...prev.filter((m) => m !== tempMessage),
         { ...tempMessage, response: errorMsg },
       ]);
       if (errorMsg === 'No token provided' || errorMsg === 'Invalid token') {
-        setTimeout(() => {
-          router.push('/login');
-        }, 2000);
+        setTimeout(() => router.push('/login'), 2000);
       }
     } finally {
       setIsLoading(false);
