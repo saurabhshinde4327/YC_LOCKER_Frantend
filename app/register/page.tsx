@@ -27,8 +27,8 @@ const registrationQueue = {
     if (task) {
       try {
         await task()
-      } catch (error) {
-        console.error('Queue processing error:', error)
+      } catch (err) {
+        console.error('Queue processing error:', err)
       }
       await new Promise(resolve => setTimeout(resolve, 1000))
       await this.process()
@@ -59,7 +59,8 @@ export default function Register() {
       toast.success('OTP sent to your email!')
       setStep('otp')
       return true
-    } catch (error) {
+    } catch (err) {
+      console.error('OTP send failed:', err)
       toast.error('Failed to send OTP.')
       return false
     }
@@ -76,9 +77,11 @@ export default function Register() {
       toast.success('Registration successful!')
       router.push('/dashboard')
       return true
-    } catch (error: any) {
-      if (axios.isAxiosError(error)) {
-        toast.error(error.response?.data?.error || 'OTP verification failed')
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        toast.error(err.response?.data?.error || 'OTP verification failed')
+      } else {
+        toast.error('An unknown error occurred')
       }
       return false
     }
@@ -170,7 +173,7 @@ export default function Register() {
 
             {step === 'otp' && (
               <p className="mt-4 text-center text-sm text-gray-500">
-                Didn't get the code?{' '}
+                Didn&rsquo;t get the code?{' '}
                 <button
                   type="button"
                   className="text-blue-600 font-medium hover:text-blue-700"
