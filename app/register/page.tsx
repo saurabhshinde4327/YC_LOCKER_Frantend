@@ -8,7 +8,6 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { getApiUrl } from '../config/api'
 
-// Queue system for registration requests
 const registrationQueue = {
   queue: [] as (() => Promise<void>)[],
   processing: false,
@@ -31,7 +30,6 @@ const registrationQueue = {
       } catch (error) {
         console.error('Queue processing error:', error)
       }
-      // Wait for 1 second before processing next request
       await new Promise(resolve => setTimeout(resolve, 1000))
       await this.process()
     }
@@ -42,7 +40,10 @@ export default function Register() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
+  const [step, setStep] = useState<'form' | 'otp'>('form')
+  const [otp, setOtp] = useState('')
   const maxRetries = 3
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -52,34 +53,34 @@ export default function Register() {
     department: ''
   })
 
-  const attemptRegistration = async () => {
+  const initiateRegistration = async (): Promise<boolean> => {
     try {
-      const response = await axios.post(getApiUrl('api/auth/register'), formData)
+      await axios.post(getApiUrl('api/auth/register/initiate'), formData)
+      toast.success('OTP sent to your email!')
+      setStep('otp')
+      return true
+    } catch (error) {
+      toast.error('Failed to send OTP.')
+      return false
+    }
+  }
+
+  const verifyOtpAndRegister = async (): Promise<boolean> => {
+    try {
+      const response = await axios.post(getApiUrl('api/auth/register/verify'), {
+        ...formData,
+        otp
+      })
       localStorage.setItem('token', response.data.token)
       localStorage.setItem('user', JSON.stringify(response.data.user))
       toast.success('Registration successful!')
       router.push('/dashboard')
       return true
-    } catch (error) {
+    } catch (error: any) {
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 429) {
-          if (retryCount < maxRetries) {
-            setRetryCount(prev => prev + 1)
-            // Exponential backoff: 2^retryCount seconds
-            const delay = Math.pow(2, retryCount) * 1000
-            toast.loading(`Server busy. Retrying in ${delay/1000} seconds...`, { id: 'retry' })
-            await new Promise(resolve => setTimeout(resolve, delay))
-            return false
-          } else {
-            toast.error('Server is currently busy. Please try again in a few minutes.')
-          }
-        } else {
-          toast.error(error.response?.data?.error || 'Registration failed')
-        }
-      } else {
-        toast.error('Registration failed')
+        toast.error(error.response?.data?.error || 'OTP verification failed')
       }
-      return true
+      return false
     }
   }
 
@@ -88,15 +89,22 @@ export default function Register() {
     setIsLoading(true)
     setRetryCount(0)
 
-    const registrationTask = async () => {
+    const task = async () => {
       let success = false
       while (!success && retryCount < maxRetries) {
-        success = await attemptRegistration()
+        success = await initiateRegistration()
       }
       setIsLoading(false)
     }
 
-    await registrationQueue.add(registrationTask)
+    await registrationQueue.add(task)
+  }
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    const success = await verifyOtpAndRegister()
+    if (!success) setIsLoading(false)
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -106,10 +114,7 @@ export default function Register() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       <div className="absolute top-4 left-4">
-        <Link 
-          href="/"
-          className="inline-flex items-center text-blue-600 hover:text-blue-700 transition-colors"
-        >
+        <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700">
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
@@ -118,154 +123,72 @@ export default function Register() {
       </div>
 
       <div className="flex min-h-screen items-center justify-center p-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
-        >
-          <div className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(8,_112,_184,_0.07)] p-8">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-lg p-8">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 inline-block text-transparent bg-clip-text">
-                Create Account
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 text-transparent bg-clip-text">
+                {step === 'form' ? 'Create Account' : 'Verify OTP'}
               </h2>
-              <p className="text-gray-600 mt-2">Sign up to start storing your documents</p>
+              <p className="text-gray-600 mt-2">
+                {step === 'form' ? 'Sign up to start storing your documents' : 'Enter the OTP sent to your email'}
+              </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  required
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
-                  placeholder="Enter your full name"
-                />
-              </div>
+            {step === 'form' ? (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <input type="text" name="name" placeholder="Name" value={formData.name} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border" />
+                <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border" />
+                <input type="tel" name="phone" placeholder="Phone" value={formData.phone} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border" />
+                <input type="text" name="studentId" placeholder="Student ID" value={formData.studentId} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border" />
+                <input type="text" name="department" placeholder="Department" value={formData.department} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border" />
+                <input type="password" name="password" placeholder="Password" value={formData.password} onChange={handleChange} required className="w-full px-4 py-3 rounded-xl border" />
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  required
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
-                  placeholder="Enter your email"
-                />
-              </div>
+                <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition disabled:opacity-50">
+                  {isLoading ? 'Sending OTP...' : 'Send OTP'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleOtpSubmit} className="space-y-6">
+                <div>
+                  <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">OTP</label>
+                  <input
+                    type="text"
+                    id="otp"
+                    name="otp"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter the OTP"
+                    required
+                  />
+                </div>
+                <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition disabled:opacity-50">
+                  {isLoading ? 'Verifying...' : 'Verify & Register'}
+                </button>
+              </form>
+            )}
 
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  required
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
-                  placeholder="Enter your phone number"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="studentId" className="block text-sm font-medium text-gray-700 mb-2">
-                  Student ID
-                </label>
-                <input
-                  type="text"
-                  id="studentId"
-                  name="studentId"
-                  required
-                  value={formData.studentId}
-                  onChange={handleChange}
-                  className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
-                  placeholder="Enter your student ID"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-2">
-                  Department
-                </label>
-                <select
-                  id="department"
-                  name="department"
-                  required
-                  value={formData.department}
-                  onChange={handleChange}
-                  className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
+            {step === 'otp' && (
+              <p className="mt-4 text-center text-sm text-gray-500">
+                Didn't get the code?{' '}
+                <button
+                  type="button"
+                  className="text-blue-600 font-medium hover:text-blue-700"
+                  onClick={() => {
+                    setRetryCount(0)
+                    setIsLoading(true)
+                    registrationQueue.add(async () => {
+                      await initiateRegistration()
+                      setIsLoading(false)
+                    })
+                  }}
                 >
-                  <option className='text-gray-500' value="">Select your department</option>
-                  <option className='text-gray-500' value="botany">Botany</option>
-                  <option className='text-gray-500' value="chemistry">Chemistry</option>
-                  <option className='text-gray-500' value="electronics">Electronics</option>
-                  <option className='text-gray-500' value="english">English</option>
-                  <option className='text-gray-500' value="mathematics">Mathematics</option>
-                  <option className='text-gray-500' value="microbiology">Microbiology</option>
-                  <option className='text-gray-500' value="sports">Sports</option>
-                  <option className='text-gray-500' value="statistics">Statistics</option>
-                  <option className='text-gray-500' value="zoology">Zoology</option>
-                  <option className='text-gray-500' value="animation-science">Animation Science</option>
-                  <option className='text-gray-500' value="data-science">Data Science</option>
-                  <option className='text-gray-500' value="artificial-intelligence">Artificial Intelligence</option>
-                  <option className='text-gray-500' value="bvoc-software-development">B.Voc Software Development</option>
-                  <option className='text-gray-500' value="bioinformatics">Bioinformatics</option>
-                  <option className='text-gray-500' value="computer-application">Computer Application</option>
-                  <option className='text-gray-500' value="computer-science-entire">Computer Science (Entire)</option>
-                  <option className='text-gray-500' value="computer-science-optional">Computer Science (Optional)</option>
-                  <option className='text-gray-500' value="drug-chemistry">Drug Chemistry</option>
-                  <option className='text-gray-500' value="food-technology">Food Technology</option>
-                  <option className='text-gray-500' value="forensic-science">Forensic Science</option>
-                  <option className='text-gray-500' value="nanoscience-and-technology">Nanoscience and Technology</option>
-                </select>
-              </div>
+                  Resend OTP
+                </button>
+              </p>
+            )}
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="block w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
-                  placeholder="Create a password"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {isLoading ? (
-                  <div className="flex items-center justify-center">
-                    <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Creating Account...
-                  </div>
-                ) : 'Create Account'}
-              </button>
-
+            {step === 'form' && (
               <div className="mt-4 text-center">
                 <p className="text-sm text-gray-600">
                   Already have an account?{' '}
@@ -274,10 +197,10 @@ export default function Register() {
                   </Link>
                 </p>
               </div>
-            </form>
+            )}
           </div>
         </motion.div>
       </div>
     </div>
   )
-} 
+}
